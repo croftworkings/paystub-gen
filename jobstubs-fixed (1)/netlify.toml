@@ -1,5 +1,5 @@
 [build]
-  publish = "."
+  publish = "jobstubs-fixed (1)"
   functions = "netlify/functions"
   # SUPABASE_URL and SUPABASE_ANON_KEY are client-safe by design (RLS, not
   # secrecy, protects the data) and are meant to ship in config.js. Without
