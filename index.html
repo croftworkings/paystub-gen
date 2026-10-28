@@ -1,0 +1,1244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Payroll Stub Generator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.9.0/JsBarcode.all.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ─────────────────────────────────────────────────── */
+:root{
+  --bg:#FAFAF8; --panel:#FFFFFF; --panel-sunk:#F4F4F1;
+  --text:#14151A; --muted:#6B6F76; --faint:#9A9DA3;
+  --line:#E7E6E1; --line-strong:#D7D5CE;
+  --ink:#0E0F12; --accent:#0E6B4F; --accent-dark:#0A5640; --accent-soft:#E7F3EC;
+  --danger:#B3261E; --shadow:0 1px 2px rgba(20,21,26,.04), 0 10px 28px -14px rgba(20,21,26,.18);
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#121314; --panel:#1B1C1E; --panel-sunk:#232426;
+  --text:#F2F1ED; --muted:#A7A9AE; --faint:#7C7E84;
+  --line:#2E2F32; --line-strong:#3A3B3F;
+  --accent:#2FA07C; --accent-dark:#249169; --accent-soft:#17251F;
+  --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.5);
+  color-scheme:dark;
+}}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);-webkit-font-smoothing:antialiased;}
+.hidden{display:none !important;}
+
+/* ── Logomark, used in nav + login ────────────────────────────────── */
+.brandMark{width:30px;height:30px;border-radius:9px;background:var(--ink);display:flex;align-items:center;justify-content:center;flex:none;}
+.brandMark svg{width:16px;height:16px;}
+.brandRow{display:flex;align-items:center;gap:10px;}
+.brandWord{font-weight:700;font-size:.95rem;letter-spacing:-.01em;}
+
+/* ── Login (premium dark/gradient, finance-app style) ───────────────── */
+.authWrap{
+  --a-bg0:#06070A; --a-bg1:#0A0D13; --a-card:rgba(20,23,31,.68); --a-card-border:rgba(255,255,255,.09);
+  --a-text:#F4F5F8; --a-muted:#9BA1AE; --a-faint:#6B7280;
+  --a-line:rgba(255,255,255,.10); --a-line-strong:rgba(255,255,255,.20);
+  --a-grad1:#22D3A8; --a-grad2:#34C2FF; --a-grad3:#7C6CFF;
+  min-height:100vh;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  padding:24px;isolation:isolate;
+  background:
+    radial-gradient(1100px 650px at 10% -12%, rgba(34,211,168,.20), transparent 60%),
+    radial-gradient(900px 600px at 108% 12%, rgba(124,108,255,.22), transparent 55%),
+    radial-gradient(760px 520px at 50% 125%, rgba(52,194,255,.16), transparent 55%),
+    linear-gradient(180deg,var(--a-bg0),var(--a-bg1));
+}
+.authGlow{position:absolute;border-radius:50%;filter:blur(95px);opacity:.5;pointer-events:none;z-index:0;animation:authDrift 14s ease-in-out infinite alternate;}
+.authGlow.a{width:420px;height:420px;background:var(--a-grad1);top:-130px;left:-120px;}
+.authGlow.b{width:380px;height:380px;background:var(--a-grad3);bottom:-150px;right:-110px;animation-delay:-7s;}
+@keyframes authDrift{from{transform:translate(0,0) scale(1);}to{transform:translate(24px,18px) scale(1.08);}}
+
+.authCard{position:relative;z-index:1;background:var(--a-card);backdrop-filter:blur(20px) saturate(140%);-webkit-backdrop-filter:blur(20px) saturate(140%);border:1px solid var(--a-card-border);border-radius:22px;padding:40px 36px;width:100%;max-width:400px;box-shadow:0 1px 0 rgba(255,255,255,.06) inset, 0 30px 70px -20px rgba(0,0,0,.65);color:var(--a-text);}
+.authCard .brandRow{margin-bottom:24px;}
+.authCard .brandMark{background:linear-gradient(135deg,var(--a-grad1),var(--a-grad2));box-shadow:0 0 0 1px rgba(255,255,255,.14),0 6px 18px -4px rgba(34,211,168,.55);}
+.authCard .brandWord{color:var(--a-text);}
+.authCard h1{margin:0 0 6px;font-size:1.35rem;font-weight:700;letter-spacing:-.01em;color:var(--a-text);}
+.authCard p.sub{color:var(--a-muted);font-size:.85rem;margin:0 0 22px;line-height:1.5;}
+.authCard label{display:block;font-size:.72rem;font-weight:600;color:var(--a-muted);margin-bottom:6px;}
+
+.authTabs{position:relative;display:flex;background:rgba(255,255,255,.05);border:1px solid var(--a-line);border-radius:12px;padding:4px;margin-bottom:24px;}
+.authTab{flex:1;position:relative;z-index:1;background:none;border:none;color:var(--a-muted);font-size:.8rem;font-weight:700;font-family:inherit;padding:9px 0;margin:0;border-radius:9px;cursor:pointer;transition:color .2s;}
+.authTab.active{color:#071510;}
+.authTabIndicator{position:absolute;top:4px;left:4px;width:calc(50% - 4px);height:calc(100% - 8px);border-radius:9px;background:linear-gradient(135deg,var(--a-grad1),var(--a-grad2));transition:transform .25s cubic-bezier(.4,0,.2,1);z-index:0;}
+.authTabIndicator.right{transform:translateX(100%);}
+
+.authInput{width:100%;padding:11px 13px;font-size:.88rem;border:1px solid var(--a-line);border-radius:10px;background:rgba(255,255,255,.045);color:var(--a-text);margin:0 0 16px;font-family:inherit;transition:border-color .15s,background .15s;}
+.authInput::placeholder{color:var(--a-faint);}
+.authInput:focus{outline:none;border-color:var(--a-grad2);background:rgba(255,255,255,.08);}
+
+.authBtn{display:block;width:100%;border:none;border-radius:10px;padding:11px 14px;font-size:.85rem;font-weight:700;font-family:inherit;cursor:pointer;margin:0 0 10px;transition:opacity .15s,transform .1s;}
+.authBtn:last-child{margin-bottom:0;}
+.authBtn:active{transform:translateY(1px);}
+.authBtn.primary{background:linear-gradient(135deg,var(--a-grad1),var(--a-grad2));color:#06110D;box-shadow:0 10px 26px -10px rgba(34,211,168,.55);}
+.authBtn.primary:hover{opacity:.92;}
+.authBtn.oauth{background:rgba(255,255,255,.97);color:#1F2430;display:flex;align-items:center;justify-content:center;gap:10px;}
+.authBtn.oauth:hover{background:#fff;}
+.authBtn.oauth svg{width:17px;height:17px;flex:none;}
+.authBtn.ghost{background:none;border:1px solid var(--a-line);color:var(--a-muted);}
+.authBtn.ghost:hover{color:var(--a-text);border-color:var(--a-line-strong);}
+
+.authDivider{display:flex;align-items:center;gap:12px;color:var(--a-faint);font-size:.68rem;margin:16px 0;text-transform:uppercase;letter-spacing:.06em;}
+.authDivider::before,.authDivider::after{content:'';flex:1;height:1px;background:var(--a-line);}
+
+.authErr{color:#FF8A80;font-size:.8rem;margin-top:4px;min-height:1em;}
+.authFoot{text-align:center;color:var(--a-faint);font-size:.7rem;margin-top:22px;}
+
+/* ── Top nav ───────────────────────────────────────────────────────── */
+.topbar{display:flex;justify-content:space-between;align-items:center;max-width:1180px;margin:0 auto;padding:16px 24px;}
+.navAcct{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);color:var(--text);padding:6px 8px 6px 14px;border-radius:999px;font-size:.8rem;cursor:pointer;transition:border-color .15s,box-shadow .15s;}
+.navAcct:hover{border-color:var(--line-strong);box-shadow:var(--shadow);}
+.navAcct .who{display:flex;flex-direction:column;align-items:flex-start;line-height:1.25;}
+.navAcct .who b{font-weight:600;font-size:.82rem;}
+.navAcct .who span{font-size:.68rem;color:var(--muted);}
+.navAcct .avatar{width:28px;height:28px;border-radius:50%;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:700;flex:none;}
+.navAcct .chev{color:var(--faint);font-size:.6rem;margin-left:2px;}
+.navSignout{background:none;border:none;color:var(--muted);font-size:.76rem;padding:6px 4px;margin:0 0 0 14px;text-decoration:underline;text-underline-offset:2px;}
+.navSignout:hover{color:var(--text);}
+.navLeft{display:flex;align-items:center;}
+
+/* ── Paywall ───────────────────────────────────────────────────────── */
+.paywall{position:fixed;inset:0;background:rgba(14,15,18,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;backdrop-filter:blur(2px);}
+.paywallCard{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:30px;max-width:420px;width:100%;box-shadow:var(--shadow);}
+.paywallCard h1{font-size:1.15rem;letter-spacing:-.01em;}
+.planRow{border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:12px;display:flex;justify-content:space-between;align-items:center;gap:10px;}
+.planRow div.label{font-weight:600;font-size:.88rem;}
+.planRow div.sub{font-size:.72rem;color:var(--muted);font-weight:normal;margin-top:2px;}
+
+/* ── Dashboard ─────────────────────────────────────────────────────── */
+.dashWrap{max-width:1180px;margin:0 auto;padding:8px 24px 60px;}
+.dashHead{margin:18px 0 28px;}
+.dashHead h1{font-size:1.7rem;font-weight:700;letter-spacing:-.02em;margin:0 0 6px;}
+.dashHead p{color:var(--muted);font-size:.92rem;margin:0;}
+.dashGrid{display:grid;grid-template-columns:1fr 1fr;gap:20px;}
+.dashCard{border:1px solid var(--line);border-radius:20px;padding:36px 32px;background:var(--panel);box-shadow:var(--shadow);cursor:pointer;transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;display:flex;flex-direction:column;min-height:260px;text-align:left;}
+.dashCard:hover{transform:translateY(-3px);border-color:var(--line-strong);}
+.dashCard .ic{width:52px;height:52px;border-radius:14px;background:var(--accent-soft);color:var(--accent-dark);display:flex;align-items:center;justify-content:center;margin-bottom:auto;}
+.dashCard .ic svg{width:24px;height:24px;}
+.dashCard h2{font-size:1.25rem;font-weight:700;letter-spacing:-.01em;margin:22px 0 8px;}
+.dashCard p{color:var(--muted);font-size:.88rem;line-height:1.5;margin:0 0 20px;}
+.dashCard .go{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:.86rem;color:var(--accent-dark);}
+.dashCard .go svg{width:14px;height:14px;transition:transform .15s;}
+.dashCard:hover .go svg{transform:translateX(3px);}
+@media (max-width:760px){.dashGrid{grid-template-columns:1fr;}}
+
+/* ── Account settings ─────────────────────────────────────────────── */
+.acctWrap{max-width:640px;margin:0 auto;padding:8px 24px 60px;}
+.acctCard{border:1px solid var(--line);border-radius:18px;background:var(--panel);box-shadow:var(--shadow);padding:30px 32px;}
+.acctCard h1{font-size:1.3rem;font-weight:700;letter-spacing:-.01em;margin:0 0 4px;}
+.acctCard p.sub{color:var(--muted);font-size:.85rem;margin:0 0 24px;}
+.acctCard label{display:block;font-size:.72rem;font-weight:600;color:var(--muted);margin:14px 0 6px;}
+.acctCard input:disabled{background:var(--panel-sunk);color:var(--faint);}
+.acctSaveRow{display:flex;align-items:center;gap:12px;margin-top:22px;}
+.acctMsg{font-size:.8rem;color:var(--accent-dark);min-height:1em;}
+
+.wrap{display:flex;gap:20px;padding:8px 24px 60px;max-width:1180px;margin:0 auto;flex-wrap:wrap;}
+.form-col{flex:1 1 380px;min-width:320px;background:var(--panel);border:1px solid var(--line);box-shadow:var(--shadow);border-radius:16px;padding:22px;}
+.preview-col{flex:2 1 650px;min-width:320px;display:flex;flex-direction:column;align-items:center;}
+h1{font-size:1.15rem;font-weight:700;letter-spacing:-.01em;margin:0 0 16px;}
+fieldset{border:1px solid var(--line);border-radius:12px;margin-bottom:20px;padding:14px 16px 18px;}
+legend{font-size:.74rem;font-weight:700;letter-spacing:.01em;color:var(--muted);padding:0 6px;}
+label{display:block;font-size:.72rem;color:var(--muted);margin-top:10px;font-weight:500;}
+input,select{width:100%;padding:9px 10px;font-size:.85rem;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);margin-top:4px;font-family:inherit;transition:border-color .15s;}
+input:focus,select:focus{outline:none;border-color:var(--accent);}
+input:disabled{opacity:.6;}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.item-row{display:grid;grid-template-columns:1.2fr .7fr .7fr .9fr auto;gap:4px;align-items:end;margin-top:6px;}
+.ditem-row{display:grid;grid-template-columns:1.5fr 1fr 1fr auto;gap:4px;align-items:end;margin-top:6px;}
+.ckrow{display:flex;align-items:center;gap:6px;margin-top:10px;font-size:.78rem;}
+.ckrow input{width:auto;margin:0;}
+button{cursor:pointer;border:none;border-radius:8px;padding:9px 14px;font-size:.8rem;font-weight:600;font-family:inherit;background:var(--ink);color:#fff;margin-top:8px;margin-right:6px;transition:opacity .15s,transform .1s;}
+button:hover{opacity:.88;}
+button:active{transform:translateY(1px);}
+button.sec{background:var(--panel);color:var(--text);border:1px solid var(--line);}
+button.del{background:transparent;color:var(--danger);border:1px solid var(--line);padding:5px 8px;}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;}
+#scaleWrap{overflow:auto;max-width:100%;}
+.page{width:8.5in;height:11in;background:#fff;color:#111;padding:.45in .4in;font-family:Arial,Helvetica,sans-serif;position:relative;box-shadow:0 0 12px rgba(0,0,0,.25);transform-origin:top left;}
+.page+.page{margin-top:24px;}
+.letterBody{font-size:12.5px;line-height:1.8;}
+.hdr{display:flex;gap:14px;align-items:flex-start;}
+.logo{width:64px;height:64px;object-fit:contain;border:1px dashed #bbb;display:flex;align-items:center;justify-content:center;font-size:9px;color:#999;}
+.cname{font-weight:bold;font-size:13.5px;line-height:1.45;}
+.nameRow{display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #333;margin-top:16px;padding-top:7px;font-size:12.5px;}
+.empName{font-weight:bold;font-size:16px;}
+table{width:100%;border-collapse:collapse;font-size:10.5px;margin-top:6px;table-layout:fixed;}
+.bar{background:#7ea6c9;color:#fff;font-size:8.5px;font-weight:bold;padding:4px 6px;text-align:center;}
+.bar.gap{background:transparent;}
+.bar.net{background:#111;}
+th,td{padding:3px 5px;text-align:left;border:none;}
+th{font-size:8px;color:#444;font-weight:normal;border-bottom:1px solid #999;}
+.sumTbl td{font-size:11px;}
+.pos{border-top:1px solid #333;border-bottom:1px solid #333;margin-top:10px;padding:6px 0;font-weight:bold;font-size:12px;}
+.stub{background:#ececec;margin-top:18px;padding:16px;width:100%;}
+.stubBox{width:320px;}
+.cbox{border:1px solid #333;padding:8px 16px;font-weight:bold;box-sizing:border-box;}
+.cbox2{display:flex;border:1px solid #333;border-top:none;box-sizing:border-box;}
+.cbox2 div{flex:1;padding:6px 10px;font-size:11px;border-right:1px solid #333;}
+.cbox2 div:last-child{border-right:none;}
+.payTo{margin-top:26px;display:flex;justify-content:space-between;align-items:flex-start;}
+.amtBox{border:1px solid #333;padding:8px 16px;font-weight:bold;font-size:15px;white-space:nowrap;}
+.genNum{text-align:center;margin-top:24px;font-size:13px;letter-spacing:1px;}
+.notice{text-align:center;font-size:11px;color:#444;margin-top:12px;font-family:'Courier New',Courier,monospace;}
+.bcwrap{position:absolute;bottom:1.3in;right:.4in;text-align:center;}
+.bcwrap.hidden{display:none;}
+.bcnum{font-size:11px;letter-spacing:2px;margin-top:2px;}
+#printRoot{display:none;}
+.captureStage{position:fixed;left:-20000px;top:0;width:8.5in;height:11in;overflow:hidden;pointer-events:none;background:#fff;}
+@media print{
+  @page{size:letter;margin:0;}
+  html,body{margin:0 !important;padding:0 !important;background:#fff !important;height:auto !important;}
+  body > *:not(#printRoot){display:none !important;}
+  #printRoot{display:block !important;}
+  #printRoot .page{box-shadow:none !important;transform:none !important;margin:0 !important;width:8.5in;height:10.98in;overflow:hidden;break-after:page;page-break-after:always;}
+  #printRoot .page:last-child{break-after:auto;page-break-after:auto;}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+}
+</style>
+</head>
+<body>
+
+<!-- ── Auth view: shown until the user has a verified Supabase session ── -->
+<div class="authWrap" id="authView">
+  <div class="authGlow a"></div>
+  <div class="authGlow b"></div>
+  <div class="authCard">
+    <div class="brandRow">
+      <div class="brandMark"><svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 19l-7-7 7-7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      <div class="brandWord">Payroll Stub Generator</div>
+    </div>
+
+    <div class="authTabs">
+      <button type="button" class="authTab active" id="tabSignin" onclick="switchAuthTab('signin')">Sign in</button>
+      <button type="button" class="authTab" id="tabSignup" onclick="switchAuthTab('signup')">Create account</button>
+      <div class="authTabIndicator" id="authTabIndicator"></div>
+    </div>
+
+    <!-- Sign in: email + password -->
+    <div id="authPanelSignin">
+      <div id="signinStep1">
+        <h1>Welcome back</h1>
+        <p class="sub">Sign in with your email and password.</p>
+        <label>Email</label>
+        <input type="email" id="signinEmail" class="authInput" placeholder="you@example.com" autocomplete="email">
+        <label>Password</label>
+        <input type="password" id="signinPassword" class="authInput" placeholder="••••••••" autocomplete="current-password">
+        <button class="authBtn primary" onclick="signInPassword()">Sign in</button>
+        <div class="authDivider"><span>or</span></div>
+        <button class="authBtn oauth" onclick="signInWithGoogle()">
+          <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.9 6.1 29.8 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.9 6.1 29.8 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.7 0 10.7-1.9 14.6-5.4l-6.7-5.6c-2.1 1.5-4.8 2.5-7.9 2.5-5.2 0-9.7-3.3-11.3-8l-6.6 5.1C9.6 39.7 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.7 5.6C41.5 36.4 44 30.7 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+          Continue with Google
+        </button>
+      </div>
+    </div>
+
+    <!-- Create account: Google OAuth, or email + password with any email provider -->
+    <div id="authPanelSignup" class="hidden">
+      <div id="signupStep1">
+        <h1>Create your account</h1>
+        <p class="sub">Sign up with Google, or any email address.</p>
+        <button class="authBtn oauth" onclick="signInWithGoogle()">
+          <svg viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3c-1.6 4.7-6.1 8-11.3 8-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.1 8 3l5.7-5.7C34.9 6.1 29.8 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.2-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.6 15.6 18.9 13 24 13c3.1 0 5.8 1.1 8 3l5.7-5.7C34.9 6.1 29.8 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.7 0 10.7-1.9 14.6-5.4l-6.7-5.6c-2.1 1.5-4.8 2.5-7.9 2.5-5.2 0-9.7-3.3-11.3-8l-6.6 5.1C9.6 39.7 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.3-2.2 4.2-4.1 5.6l6.7 5.6C41.5 36.4 44 30.7 44 24c0-1.2-.1-2.4-.4-3.5z"/></svg>
+          Continue with Google
+        </button>
+        <div class="authDivider"><span>or</span></div>
+        <label>Email</label>
+        <input type="email" id="signupEmail" class="authInput" placeholder="you@example.com" autocomplete="email">
+        <label>Password</label>
+        <input type="password" id="signupPassword" class="authInput" placeholder="Create a password" autocomplete="new-password">
+        <button class="authBtn primary" onclick="signUpEmail()">Create account</button>
+      </div>
+      <div id="signupStep2" class="hidden">
+        <h1>Check your inbox</h1>
+        <p class="sub" id="signupStep2Sub">We sent a confirmation link to your email.</p>
+        <button class="authBtn ghost" onclick="backToSignup()">Use a different email</button>
+      </div>
+    </div>
+
+    <div class="authErr" id="authErr"></div>
+    <div class="authFoot">Secured by Supabase</div>
+  </div>
+</div>
+
+<!-- ── Paywall modal: shown when record-generation says not allowed ── -->
+<div class="paywall hidden" id="paywall">
+  <div class="paywallCard">
+    <h1 style="margin-top:0">Your free generation is used</h1>
+    <p class="sub" style="margin-top:-6px">Pick how you'd like to continue.</p>
+    <div class="planRow">
+      <div><div class="label">Yearly subscription</div><div class="sub">$600 CAD/yr · unlimited paystubs &amp; letters</div></div>
+      <button onclick="startCheckout('subscription')">Subscribe</button>
+    </div>
+    <div class="planRow">
+      <div><div class="label">Pay per use</div><div class="sub">$100 CAD · 1 generation</div></div>
+      <button class="sec" onclick="startCheckout('payperuse')">Pay $100</button>
+    </div>
+    <div class="authErr" id="paywallErr"></div>
+    <button class="sec" style="margin-top:14px" onclick="closePaywall()">Close</button>
+  </div>
+</div>
+
+<div class="topbar hidden" id="topbar">
+  <div class="navLeft brandRow">
+    <div class="brandMark"><svg viewBox="0 0 24 24" fill="none"><path d="M19 12H5M11 19l-7-7 7-7" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+    <div class="brandWord hidden" id="navWordmark" style="color:var(--muted);font-weight:600;">Payroll Stub Generator</div>
+  </div>
+  <div style="display:flex;align-items:center;">
+    <div class="navAcct" onclick="showTool('account')" title="Account settings">
+      <div class="avatar" id="navAvatar">?</div>
+      <div class="who"><b id="navName">—</b><span id="navSub">Account</span></div>
+      <span class="chev">▾</span>
+    </div>
+    <button class="navSignout" onclick="signOut()">Sign out</button>
+  </div>
+</div>
+
+<div class="hidden" id="appView">
+
+<div class="dashWrap" id="dashboardPane">
+  <div class="dashHead">
+    <h1 id="dashGreeting">Welcome back</h1>
+    <p>Generate a paystub or an employment letter in a couple of minutes.</p>
+  </div>
+  <div class="dashGrid">
+  <div class="dashCard" onclick="showTool('paystub')">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 10h18M7 15h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+    <h2>Generate Paystub</h2>
+    <p>A pay stub for an employee's pay period, with taxes calculated automatically.</p>
+    <span class="go">Generate paystub <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </div>
+  <div class="dashCard" onclick="showTool('letter')">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none"><path d="M4 4h16v16H4z" stroke="currentColor" stroke-width="1.8"/><path d="M8 9h8M8 13h8M8 17h4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+    <h2>Generate Job Letter</h2>
+    <p>A letter confirming employment, salary and start date.</p>
+    <span class="go">Generate letter <svg viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 5l7 7-7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+  </div>
+  </div>
+</div>
+
+<div class="wrap hidden" id="paystubPane">
+  <div class="form-col">
+    <h1>Payroll Stub Generator</h1>
+    <div class="actions">
+      <button class="sec" onclick="showTool('dashboard')">&larr; Dashboard</button>
+      <button onclick="newGenNum()">New Generation #</button>
+      <button onclick="requestGeneration(printPaystub)">Print</button>
+      <button class="sec" onclick="requestGeneration(downloadPDF)">Download PDF</button>
+    </div>
+    <fieldset>
+      <legend>Company</legend>
+      <label>Logo</label><input type="file" id="logoFile" accept="image/*">
+      <label>Company Name</label><input id="compName" value="COMPANY NAME">
+      <label>Address Line 1</label><input id="compAddr1" value="123 Main Street">
+      <label>Address Line 2</label><input id="compAddr2" value="Toronto, ON">
+    </fieldset>
+    <fieldset>
+      <legend>Employee</legend>
+      <label>Full Name</label><input id="empName" value="FIRST NAME, LAST NAME">
+      <label>Employee No.</label><input id="empNo" value="AR 2746">
+      <label>Position</label><input id="empPos" value="">
+      <label>Address Line 1</label><input id="empAddr1" value="EMPLOYEE ADDRESS LINE ONE">
+      <label>Address Line 2</label><input id="empAddr2" value="EMPLOYEE ADDRESS LINE TWO">
+    </fieldset>
+    <fieldset>
+      <legend>Pay Period</legend>
+      <label>Province (for tax calculation)</label>
+      <select id="province" onchange="render()">
+        <option value="ON" selected>Ontario</option>
+        <option value="AB">Alberta</option>
+        <option value="BC">British Columbia</option>
+        <option value="MB">Manitoba</option>
+        <option value="NB">New Brunswick</option>
+        <option value="NL">Newfoundland and Labrador</option>
+        <option value="NS">Nova Scotia</option>
+        <option value="PE">Prince Edward Island</option>
+        <option value="SK">Saskatchewan</option>
+        <option value="NT">Northwest Territories</option>
+        <option value="NU">Nunavut</option>
+        <option value="YT">Yukon</option>
+      </select>
+      <div style="font-size:.68rem;color:var(--muted);margin-top:4px">Quebec isn't supported here — it uses its own QPP/QPIP system and a separate provincial return instead of the CRA formula this tool uses.</div>
+      <div class="ckrow"><input type="checkbox" id="useRecent" onchange="toggleRecent()"><label style="margin:0">Use most recent pay period (auto-fill)</label></div>
+      <div class="row3">
+        <div><label>Period Start (Sun)</label><input type="date" id="pStart" onchange="onStartChange()"></div>
+        <div><label>Period End (Sat)</label><input type="date" id="pEnd" readonly></div>
+        <div><label>Payday (Fri)</label><input type="date" id="pDay" readonly></div>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>Earnings</legend>
+      <div id="earnRows"></div>
+      <button type="button" class="sec" onclick="addEarn()">+ Add earning</button>
+    </fieldset>
+    <fieldset>
+      <legend>Deductions</legend>
+      <div id="dedRows"></div>
+      <button type="button" class="sec" onclick="addDed()">+ Add deduction</button>
+      <div style="font-size:.68rem;color:var(--muted);margin-top:8px">Fed. tax, Prov. tax, E.I. and C.P.P. are auto-calculated with CRA's 2026 payroll formulas (T4127, Jan 2026) for biweekly pay, using basic personal amounts only. YTD is rebuilt period-by-period from the first payday of the year (assuming the same gross each period), so CPP, CPP2 and EI stop at their yearly maximums. Bonuses are treated as regular pay. Ontario is fully modelled (surtax, health premium); other provinces use the standard bracket formula. Always confirm against CRA's PDOC before remitting.</div>
+    </fieldset>
+    <fieldset>
+      <legend>Options</legend>
+      <div class="ckrow"><input type="checkbox" id="showBarcode" checked onchange="render()"><label style="margin:0">Include barcode &amp; generation number</label></div>
+    </fieldset>
+    <fieldset>
+      <legend>Job Letter</legend>
+      <div class="ckrow"><input type="checkbox" id="includeLetter" onchange="toggleLetterFields()"><label style="margin:0">Also generate a job letter for this employee</label></div>
+      <div id="letterFields" class="hidden" style="margin-top:8px">
+        <label>Recipient Name / Organization (optional)</label><input id="letterRecipName" value="" oninput="render()">
+        <label>Recipient Address (optional)</label><input id="letterRecipAddr1" placeholder="Address line 1" value="" oninput="render()">
+        <input id="letterRecipAddr2" placeholder="Address line 2" value="" oninput="render()" style="margin-top:4px">
+        <label>Employment Status</label>
+        <select id="letterStatus" onchange="render()">
+          <option value="Full-Time" selected>Full-Time</option>
+          <option value="Part-Time">Part-Time</option>
+          <option value="Contract">Contract</option>
+          <option value="Seasonal">Seasonal</option>
+          <option value="Casual">Casual</option>
+        </select>
+        <label>Current Annual Compensation</label><input id="letterSalary" type="number" step="0.01" placeholder="e.g. 65000" oninput="render()">
+        <label>Employment Start Date</label><input id="letterSince" type="date" oninput="render()">
+        <label>HR Phone Number</label><input id="letterHrPhone" value="" oninput="render()">
+        <label>HR Email Address</label><input id="letterHrEmail" type="email" value="" oninput="render()">
+        <label>Upload Digital Signature (optional)</label><input type="file" id="letterSigFile" accept="image/*">
+        <button type="button" class="sec" id="letterSigClearBtn" style="display:none" onclick="clearLetterSig()">Remove signature image</button>
+        <label>Your Name</label><input id="letterSigName" value="" oninput="render()">
+        <label>Your Title</label><input id="letterSigTitle" value="" oninput="render()">
+        <label>Letter Accent Color</label><input id="letterColor" type="color" value="#1f3a5f" oninput="render()" style="height:34px;padding:2px;">
+      </div>
+    </fieldset>
+  </div>
+
+  <div class="preview-col">
+    <div id="scaleWrap"><div class="page" id="page">
+      <div class="hdr">
+        <div class="logo" id="logoBox">no logo</div>
+        <div class="cname" id="pCompName"></div>
+      </div>
+      <div class="nameRow">
+        <div class="empName" id="pEmpName"></div>
+        <div>Period Start <b id="pPStart"></b>&nbsp; to &nbsp;Period End <b id="pPEnd"></b>&nbsp; Payday <b id="pPDay"></b></div>
+      </div>
+      <table>
+        <colgroup><col style="width:14%"><col style="width:9%"><col style="width:9%"><col style="width:11%"><col style="width:11%"><col style="width:2%"><col style="width:14%"><col style="width:9%"><col style="width:9%"><col style="width:12%"></colgroup>
+        <tr><td class="bar" colspan="5">STATEMENT OF EARNINGS / BULLETIN DE PAIE</td><td class="bar gap"></td><td class="bar" colspan="4">EMPLOYEE DEDUCTION &amp; EMPLOYER CONTRIBUTIONS</td></tr>
+        <tr><th>TYPE</th><th>HOURS</th><th>RATE</th><th>AMOUNT</th><th>Y.T.D.</th><th></th><th>TYPE</th><th>CURRENT</th><th>Y.T.D.</th><th></th></tr>
+        <tbody id="pEarnBody"></tbody>
+      </table>
+      <div class="pos">POSITION &nbsp; <span id="pPos"></span></div>
+      <table class="sumTbl">
+        <tr><td class="bar">GROSS PAY</td><td class="bar">DEDUCTIONS</td><td class="bar net">NET PAY</td><td colspan="2" class="bar">NET PAY ALLOCATION</td></tr>
+        <tr><td id="pGross"></td><td id="pDedTotal"></td><td id="pNet"></td><td colspan="2"></td></tr>
+      </table>
+
+      <div class="stub">
+        <div class="stubBox">
+        <div class="cbox" id="sCompName"></div>
+        <div class="cbox2"><div>Empl. No.<br><b id="sEmpNo"></b></div><div>Payable on<br><b id="sPayDay"></b></div></div>
+        </div>
+        <div class="payTo">
+          <div>To the order of:<br><b id="sEmpName2" style="font-size:14px"></b><br><span id="sEmpAddr"></span></div>
+          <div class="amtBox" id="sAmt"></div>
+        </div>
+        <div class="genNum">*<span id="sGenNum"></span>*</div>
+      </div>
+      <div class="notice">NOTICE OF PAYROLL / NON NEGOTIABLE</div>
+      <div class="bcwrap" id="bcwrap"><svg id="barcode"></svg></div>
+    </div><div class="page hidden" id="letterPageEmbed"></div></div>
+  </div>
+</div>
+
+<div class="wrap hidden" id="letterPane">
+  <div class="form-col">
+    <h1>Job Letter Generator</h1>
+    <div class="actions">
+      <button class="sec" onclick="showTool('dashboard')">&larr; Dashboard</button>
+      <button onclick="requestGeneration(printLetter)">Print</button>
+      <button class="sec" onclick="requestGeneration(downloadLetterPDF)">Download PDF</button>
+    </div>
+    <fieldset>
+      <legend>Company</legend>
+      <label>Logo</label><input type="file" id="ltLogoFile" accept="image/*">
+      <label>Company Name</label><input id="ltCompName" value="COMPANY NAME" oninput="renderLetterTool()">
+      <label>Address Line 1</label><input id="ltCompAddr1" value="123 Main Street" oninput="renderLetterTool()">
+      <label>Address Line 2</label><input id="ltCompAddr2" value="Toronto, ON" oninput="renderLetterTool()">
+    </fieldset>
+    <fieldset>
+      <legend>Recipient (optional)</legend>
+      <label>Recipient Name / Organization</label><input id="ltRecipName" value="" placeholder="e.g. RBC Mortgage Dept." oninput="renderLetterTool()">
+      <label>Recipient Address Line 1</label><input id="ltRecipAddr1" value="" oninput="renderLetterTool()">
+      <label>Recipient Address Line 2</label><input id="ltRecipAddr2" value="" oninput="renderLetterTool()">
+    </fieldset>
+    <fieldset>
+      <legend>Employee</legend>
+      <label>Full Name</label><input id="ltEmpName" value="FIRST NAME, LAST NAME" oninput="renderLetterTool()">
+      <label>Job Title</label><input id="ltPosition" value="" oninput="renderLetterTool()">
+      <label>Employment Status</label>
+      <select id="ltStatus" onchange="renderLetterTool()">
+        <option value="Full-Time" selected>Full-Time</option>
+        <option value="Part-Time">Part-Time</option>
+        <option value="Contract">Contract</option>
+        <option value="Seasonal">Seasonal</option>
+        <option value="Casual">Casual</option>
+      </select>
+      <label>Current Annual Compensation</label><input id="ltSalary" type="number" step="0.01" placeholder="e.g. 65000" oninput="renderLetterTool()">
+      <label>Employment Start Date</label><input id="ltSince" type="date" oninput="renderLetterTool()">
+    </fieldset>
+    <fieldset>
+      <legend>Contact Info (for inquiries)</legend>
+      <label>HR Phone Number</label><input id="ltHrPhone" value="" placeholder="e.g. (416) 555-0123" oninput="renderLetterTool()">
+      <label>HR Email Address</label><input id="ltHrEmail" type="email" value="" placeholder="e.g. hr@company.com" oninput="renderLetterTool()">
+    </fieldset>
+    <fieldset>
+      <legend>Signature</legend>
+      <label>Upload Digital Signature (optional)</label><input type="file" id="ltSigFile" accept="image/*">
+      <button type="button" class="sec" id="ltSigClearBtn" style="display:none" onclick="clearLtSig()">Remove signature image</button>
+      <label>Your Name</label><input id="ltSigName" value="" placeholder="e.g. Jane Smith" oninput="renderLetterTool()">
+      <label>Your Title</label><input id="ltSigTitle" value="" placeholder="e.g. HR Manager" oninput="renderLetterTool()">
+    </fieldset>
+    <fieldset>
+      <legend>Style</legend>
+      <label>Letter Accent Color</label><input id="ltColor" type="color" value="#1f3a5f" oninput="renderLetterTool()" style="height:34px;padding:2px;">
+    </fieldset>
+  </div>
+  <div class="preview-col">
+    <div id="ltScaleWrap" style="overflow:auto;max-width:100%;"><div class="page" id="letterToolPage"></div></div>
+  </div>
+</div>
+
+<div class="acctWrap hidden" id="accountPane">
+  <div class="actions">
+    <button class="sec" onclick="showTool('dashboard')">&larr; Dashboard</button>
+  </div>
+  <div class="acctCard">
+    <h1>Account settings</h1>
+    <p class="sub">Update the name and business info used across your account.</p>
+    <label>Full name</label>
+    <input id="acctFullName" placeholder="e.g. Jordan Lee">
+    <label>Company / business name</label>
+    <input id="acctCompanyName" placeholder="e.g. Lee Bookkeeping Co.">
+    <label>Phone (optional)</label>
+    <input id="acctPhone" placeholder="e.g. (416) 555-0123">
+    <label>Email</label>
+    <input id="acctEmail" disabled>
+    <div class="acctSaveRow">
+      <button onclick="saveAccount()">Save changes</button>
+      <span class="acctMsg" id="acctMsg"></span>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<div id="printRoot"></div>
+<script>
+let earn=[{type:'HOURLY',hours:80,rate:40,ytd:64000},{type:'BONUS',hours:0,rate:0,ytd:5100}];
+let ded=[{type:'FED. TAX',cur:0,ytd:0,computed:true},{type:'PROV. TAX (ON)',cur:0,ytd:0,computed:true},{type:'E.I.',cur:0,ytd:0,computed:true},{type:'C.P.P.',cur:0,ytd:0,computed:true}];
+const FED_BRACKETS=[[58523,.14],[117045,.205],[181440,.26],[258482,.29],[Infinity,.33]];
+const FED_BPA_CREDIT=16452*0.14;
+const CPP_YMPE=74600, CPP_EXEMPT=3500, CPP_RATE=.0595, CPP_MAX=4230.45;
+const CPP2_YAMPE=85000, CPP2_RATE=.04, CPP2_MAX=416;
+const EI_MAX_INSURABLE=68900, EI_RATE=.0163, EI_MAX=1123.07;
+
+// 2026 provincial/territorial brackets, basic personal amount (BPA) and lowest marginal
+// rate (used to turn the BPA into a non-refundable credit), per CRA's published rates.
+// Only Ontario has a provincial surtax applied here. Quebec is intentionally excluded —
+// it runs its own QPP/QPIP system and a separate provincial return, not this CRA formula.
+const PROVINCES={
+  ON:{name:'Ontario',bpa:12989,lowestRate:.0505,surtax:true,
+    brackets:[[53891,.0505],[107785,.0915],[150000,.1116],[220000,.1216],[Infinity,.1316]]},
+  AB:{name:'Alberta',bpa:22769,lowestRate:.08,
+    brackets:[[61200,.08],[154259,.10],[185111,.12],[246813,.13],[370220,.14],[Infinity,.15]]},
+  BC:{name:'British Columbia',bpa:13216,lowestRate:.056,
+    brackets:[[50363,.056],[100728,.077],[115648,.105],[140430,.1229],[190405,.147],[265545,.168],[Infinity,.205]]},
+  MB:{name:'Manitoba',bpa:15780,lowestRate:.108,
+    brackets:[[47564,.108],[101200,.1275],[Infinity,.174]]},
+  NB:{name:'New Brunswick',bpa:13664,lowestRate:.094,
+    brackets:[[52333,.094],[104666,.14],[193861,.16],[Infinity,.195]]},
+  NL:{name:'Newfoundland and Labrador',bpa:13094,lowestRate:.087,
+    brackets:[[44678,.087],[89354,.145],[159528,.158],[223340,.178],[285319,.198],[570638,.208],[1141275,.213],[Infinity,.218]]},
+  NS:{name:'Nova Scotia',bpa:11932,lowestRate:.0879,
+    brackets:[[30995,.0879],[61991,.1495],[97417,.1667],[157124,.175],[Infinity,.21]]},
+  PE:{name:'Prince Edward Island',bpa:15000,lowestRate:.095,
+    brackets:[[33928,.095],[65820,.1347],[106890,.166],[142520,.1762],[200000,.19],[Infinity,.20]]},
+  SK:{name:'Saskatchewan',bpa:20381,lowestRate:.105,
+    brackets:[[54532,.105],[155805,.125],[Infinity,.145]]},
+  NT:{name:'Northwest Territories',bpa:18198,lowestRate:.059,
+    brackets:[[53003,.059],[106009,.086],[172346,.122],[Infinity,.1405]]},
+  NU:{name:'Nunavut',bpa:19659,lowestRate:.04,
+    brackets:[[55801,.04],[111602,.07],[181439,.09],[Infinity,.115]]},
+  YT:{name:'Yukon',bpa:16452,lowestRate:.064,
+    brackets:[[58523,.064],[117045,.09],[181440,.109],[500000,.128],[Infinity,.15]]}
+};
+
+function bracketTax(income,brackets){let tax=0,prev=0;for(const[limit,rate]of brackets){const upper=Math.min(income,limit);if(upper>prev){tax+=(upper-prev)*rate;prev=upper;}if(income<=limit)break;}return tax;}
+/* ───────── CRA T4127 (122nd ed., Jan 1 2026) payroll deductions, Option 1 ─────────
+   Assumes: basic personal amounts only (no TD1 extras), no RPP/RRSP/union dues, regular periodic pay.
+   Each period's CPP/EI/tax is computed in sequence so YTD caps (CPP, CPP2, EI) are honoured. */
+const CPP_BASE_CREDIT_MAX=3519.45, EI_CREDIT_MAX=1123.07, CEA=1501;
+function r2(x){return Math.round((x+1e-9)*100)/100;}
+function trunc2(x){return Math.floor(x*100+1e-9)/100;}
+function ontarioHealthPremium(A){
+  if(A<=20000)return 0;
+  if(A<=36000)return Math.min(300,0.06*(A-20000));
+  if(A<=48000)return Math.min(450,300+0.06*(A-36000));
+  if(A<=72000)return Math.min(600,450+0.25*(A-48000));
+  if(A<=200000)return Math.min(750,600+0.25*(A-72000));
+  return Math.min(900,750+0.25*(A-200000));
+}
+// One pay period. ytd = {cpp1,cpp2,ei,pi} totals BEFORE this period.
+function calcPeriod(gross,provinceCode,P,ytd){
+  const exempt=trunc2(CPP_EXEMPT/P);
+  const c1=Math.max(0,Math.min(CPP_MAX-ytd.cpp1,r2(CPP_RATE*Math.max(0,gross-exempt))));
+  const W=Math.max(ytd.pi,CPP_YMPE);
+  const c2=Math.max(0,Math.min(CPP2_MAX-ytd.cpp2,r2(CPP2_RATE*Math.max(0,Math.min(ytd.pi+gross,CPP2_YAMPE)-W))));
+  const ei=Math.max(0,Math.min(EI_CREDIT_MAX-ytd.ei,r2(EI_RATE*gross)));
+
+  const F5=c1*(0.0100/0.0595)+c2;           // deductible (enhanced) CPP
+  const A=P*(gross-F5);
+  if(A<=0)return{fed:0,prov:0,ei,cpp:r2(c1+c2),c1,c2};
+
+  // CPP/EI credit amounts (T4127 K2 note: use the annual max once the max is reached)
+  const baseShare=0.0495/0.0595;
+  const cppMaxed=ytd.cpp1+c1>=CPP_MAX-0.005;
+  const eiMaxed=ytd.ei+ei>=EI_CREDIT_MAX-0.005;
+  const cppCredit=cppMaxed?CPP_BASE_CREDIT_MAX:Math.min(CPP_BASE_CREDIT_MAX,Math.max(P*c1*baseShare,ytd.cpp1*baseShare));
+  const eiCredit=eiMaxed?EI_CREDIT_MAX:Math.min(EI_CREDIT_MAX,Math.max(P*ei,ytd.ei));
+
+  // Federal
+  let bpaf=16452;
+  if(A>=258482)bpaf=14829;
+  else if(A>181440)bpaf=r2(16452-(A-181440)*(1623/77042));
+  const K1=0.14*bpaf, K2=0.14*(cppCredit+eiCredit), K4=0.14*Math.min(P*gross,CEA);
+  const T1=Math.max(0,bracketTax(A,FED_BRACKETS)-K1-K2-K4);
+
+  // Provincial
+  const prov=PROVINCES[provinceCode]||PROVINCES.ON;
+  const K1P=prov.lowestRate*prov.bpa, K2P=prov.lowestRate*(cppCredit+eiCredit);
+  const T4=Math.max(0,bracketTax(A,prov.brackets)-K1P-K2P);
+  let V1=0,V2=0,S=0;
+  if(prov.surtax){
+    if(T4>5818)V1+=0.20*(T4-5818);
+    if(T4>7446)V1+=0.36*(T4-7446);
+    V2=ontarioHealthPremium(A);
+    S=Math.max(0,Math.min(T4+V1,2*300-(T4+V1)));
+  }
+  const T2=Math.max(0,T4+V1+V2-S);
+  return{fed:r2(T1/P),prov:r2(T2/P),ei,cpp:r2(c1+c2),c1,c2};
+}
+// Runs periods 1..n with the same gross each period; returns this period's amounts and YTD totals.
+function calcDeductionsYTD(gross,provinceCode,n,P){
+  const ytd={cpp1:0,cpp2:0,ei:0,pi:0};
+  const tot={fed:0,prov:0,ei:0,cpp:0};
+  let cur=null;
+  for(let k=1;k<=n;k++){
+    const p=calcPeriod(gross,provinceCode,P,ytd);
+    tot.fed+=p.fed;tot.prov+=p.prov;tot.ei+=p.ei;tot.cpp+=p.cpp;
+    ytd.cpp1+=p.c1;ytd.cpp2+=p.c2;ytd.ei+=p.ei;ytd.pi+=gross;
+    cur=p;
+  }
+  return{cur,ytd:{fed:r2(tot.fed),prov:r2(tot.prov),ei:r2(tot.ei),cpp:r2(tot.cpp)}};
+}
+// Pay periods are counted by PAY DATE (CRA rule): n = which payday of the year this is, P = paydays in the year.
+function payYearInfo(paydayStr,startStr){
+  const ds=paydayStr||startStr;
+  if(!ds)return{n:1,P:26};
+  const d=new Date(ds+'T00:00:00');
+  if(isNaN(d))return{n:1,P:26};
+  const yr=d.getFullYear(), jan1=new Date(yr,0,1), dec31=new Date(yr,11,31);
+  const DAY=86400000;
+  const k=Math.floor(Math.round((d-jan1)/DAY)/14);
+  const first=new Date(d.getTime()-k*14*DAY);
+  const P=1+Math.floor(Math.round((dec31-first)/DAY)/14);
+  return{n:k+1,P};
+}
+let genNum=newGenNumValue();
+
+function newGenNumValue(){return 'S'+Math.floor(1000000000+Math.random()*8999999999);}
+function newGenNum(){genNum=newGenNumValue();render();}
+function fmt(n){return (isNaN(n)?0:n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function iso(d){return d.toISOString().slice(0,10);}
+
+function mostRecentSaturday(d){const day=d.getDay();const diff=(day+1)%7;const sat=new Date(d);sat.setDate(d.getDate()-diff);return sat;}
+
+function setEndAndPayday(start){
+  const end=new Date(start);end.setDate(start.getDate()+13);
+  const payday=new Date(end);payday.setDate(end.getDate()-1); // Friday before period end
+  document.getElementById('pEnd').value=iso(end);
+  document.getElementById('pDay').value=iso(payday);
+}
+
+function toggleRecent(){
+  const chk=document.getElementById('useRecent').checked;
+  document.getElementById('pStart').disabled=chk;
+  if(chk){
+    const end=mostRecentSaturday(new Date());
+    const start=new Date(end);start.setDate(end.getDate()-13);
+    document.getElementById('pStart').value=iso(start);
+    setEndAndPayday(start);
+    render();
+  }
+}
+
+function onStartChange(){
+  const el=document.getElementById('pStart');
+  if(!el.value)return;
+  const d=new Date(el.value+'T00:00:00');
+  if(d.getDay()!==0){
+    alert('Period Start must be a Sunday (two-week period).');
+    el.value='';document.getElementById('pEnd').value='';document.getElementById('pDay').value='';render();return;
+  }
+  setEndAndPayday(d);
+  render();
+}
+
+function periodNumber(startVal){
+  if(!startVal)return 1;
+  const d=new Date(startVal+'T00:00:00');
+  let first=new Date(d.getFullYear(),0,1);
+  while(first.getDay()!==0)first.setDate(first.getDate()+1);
+  const diffDays=Math.round((d-first)/86400000);
+  return Math.max(1,Math.floor(diffDays/14)+1);
+}
+
+function addEarn(){earn.push({type:'',hours:0,rate:0,ytd:0});renderForm();}
+function addDed(){ded.push({type:'',cur:0,ytd:0});renderForm();}
+function rmEarn(i){earn.splice(i,1);renderForm();}
+function rmDed(i){ded.splice(i,1);renderForm();}
+
+function renderForm(){
+  const eDiv=document.getElementById('earnRows');
+  eDiv.innerHTML=earn.map((e,i)=>`<div class="item-row">
+    <div><label>Type</label><input value="${e.type}" onchange="earn[${i}].type=this.value;render()"></div>
+    <div><label>Hours</label><input type="number" step="0.01" value="${e.hours}" onchange="earn[${i}].hours=+this.value;render()"></div>
+    <div><label>Rate</label><input type="number" step="0.01" value="${e.rate}" onchange="earn[${i}].rate=+this.value;render()"></div>
+    <div><label>YTD (auto)</label><input type="text" readonly id="earnYtd${i}" value="${fmt(e.ytd||0)}"></div>
+    <button type="button" class="del" onclick="rmEarn(${i})">&times;</button></div>`).join('');
+  const dDiv=document.getElementById('dedRows');
+  dDiv.innerHTML=ded.map((d,i)=>`<div class="ditem-row">
+    <div><label>Type</label><input id="dedType${i}" value="${d.type}" ${d.computed?'disabled':''} onchange="ded[${i}].type=this.value;render()"></div>
+    <div><label>Current${d.computed?' (auto)':''}</label><input type="number" step="0.01" id="dedCur${i}" value="${d.cur.toFixed(2)}" ${d.computed?'disabled':''} onchange="ded[${i}].cur=+this.value;render()"></div>
+    <div><label>YTD (auto)</label><input type="text" readonly id="dedYtd${i}" value="${fmt(d.ytd||0)}"></div>
+    <button type="button" class="del" onclick="rmDed(${i})">&times;</button></div>`).join('');
+  render();
+}
+
+function val(id){return document.getElementById(id).value;}
+
+function drawBarcode(){
+  if(typeof JsBarcode==='undefined'){setTimeout(drawBarcode,200);return;}
+  try{
+    JsBarcode('#barcode',genNum,{
+      format:'CODE128',
+      width:1.25,
+      height:74,
+      margin:0,
+      displayValue:true,
+      fontOptions:'',
+      font:'Arial, Helvetica, sans-serif',
+      fontSize:13,
+      textMargin:4,
+      textAlign:'center'
+    });
+  }catch(e){}
+}
+
+function render(){
+  document.getElementById('pCompName').innerHTML=[val('compName'),val('compAddr1'),val('compAddr2')].join('<br>');
+  document.getElementById('sCompName').textContent=val('compName');
+  document.getElementById('pEmpName').textContent=val('empName');
+  document.getElementById('sEmpName2').textContent=val('empName');
+  document.getElementById('sEmpAddr').innerHTML=[val('empAddr1'),val('empAddr2')].join('<br>');
+  document.getElementById('sEmpNo').textContent=val('empNo');
+  document.getElementById('pPos').textContent=val('empPos');
+  document.getElementById('pPStart').textContent=val('pStart');
+  document.getElementById('pPEnd').textContent=val('pEnd');
+  document.getElementById('pPDay').textContent=val('pDay');
+  document.getElementById('sPayDay').textContent=val('pDay');
+
+  let gross=0;
+  earn.forEach(e=>gross+=e.hours*e.rate);
+  const provinceCode=val('province');
+  const {n,P}=payYearInfo(val('pDay'),val('pStart'));
+  const calc=calcDeductionsYTD(gross,provinceCode,n,P);
+  const auto=[calc.cur.fed,calc.cur.prov,calc.cur.ei,calc.cur.cpp];
+  const autoYtd=[calc.ytd.fed,calc.ytd.prov,calc.ytd.ei,calc.ytd.cpp];
+  if(ded[1]&&ded[1].computed){
+    ded[1].type='PROV. TAX ('+provinceCode+')';
+    const te=document.getElementById('dedType1');if(te)te.value=ded[1].type;
+  }
+  ded.forEach((d,i)=>{if(d.computed&&auto[i]!==undefined){d.cur=auto[i];const el=document.getElementById('dedCur'+i);if(el)el.value=auto[i].toFixed(2);}});
+
+  earn.forEach((e,i)=>{e.ytd=(e.hours*e.rate)*n;const el=document.getElementById('earnYtd'+i);if(el)el.value=fmt(e.ytd);});
+  ded.forEach((d,i)=>{d.ytd=(d.computed&&autoYtd[i]!==undefined)?autoYtd[i]:d.cur*n;const el=document.getElementById('dedYtd'+i);if(el)el.value=fmt(d.ytd);});
+
+  const maxRows=Math.max(earn.length,ded.length,1);
+  let body='';
+  for(let i=0;i<maxRows;i++){
+    const e=earn[i],d=ded[i];
+    body+=`<tr><td>${e?e.type:''}</td><td>${e?(e.hours||''):''}</td><td>${e?(e.rate||''):''}</td><td>${e?fmt(e.hours*e.rate):''}</td><td>${e?fmt(e.ytd):''}</td><td></td><td>${d?d.type:''}</td><td>${d?fmt(d.cur):''}</td><td>${d?fmt(d.ytd):''}</td><td></td></tr>`;
+  }
+  document.getElementById('pEarnBody').innerHTML=body;
+
+  let dedTotal=0;ded.forEach(d=>dedTotal+=d.cur);
+  const net=gross-dedTotal;
+  document.getElementById('pGross').textContent=fmt(gross);
+  document.getElementById('pDedTotal').textContent=fmt(dedTotal);
+  document.getElementById('pNet').textContent=fmt(net);
+  document.getElementById('sAmt').textContent='$**'+fmt(net);
+  document.getElementById('sGenNum').textContent=genNum;
+
+  const showBc=document.getElementById('showBarcode').checked;
+  const bcwrap=document.getElementById('bcwrap');
+  bcwrap.classList.toggle('hidden',!showBc);
+  if(showBc)drawBarcode();
+
+  if(document.getElementById('includeLetter').checked){
+    document.getElementById('letterPageEmbed').innerHTML=letterPageHTML({
+      compName:val('compName'),compAddr1:val('compAddr1'),compAddr2:val('compAddr2'),
+      empName:val('empName'),position:val('empPos'),status:val('letterStatus'),
+      recipientName:val('letterRecipName'),recipientAddr1:val('letterRecipAddr1'),recipientAddr2:val('letterRecipAddr2'),
+      hrPhone:val('letterHrPhone'),hrEmail:val('letterHrEmail'),
+      sigName:val('letterSigName'),sigTitle:val('letterSigTitle'),sigImg:letterSigDataUrl,
+      salary:fmt(+val('letterSalary')||0),since:formatDateLong(val('letterSince')),
+      todayStr:formatDateLong(iso(new Date())),accent:val('letterColor'),
+      logoImg:document.getElementById('logoBox').innerHTML.includes('<img')?document.getElementById('logoBox').innerHTML:'no logo'
+    });
+  }
+}
+
+/* ───────────────────────── Job letter (shared template) ───────────────────────── */
+function formatDateLong(d){
+  if(!d)return '____________';
+  return new Date(d+'T00:00:00').toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+}
+function letterPageHTML(d){
+  const c=d.accent||'#1f3a5f';
+  const showTo=d.recipientName||d.recipientAddr1||d.recipientAddr2;
+  const contactBits=[];
+  if(d.hrPhone)contactBits.push(d.hrPhone);
+  if(d.hrEmail)contactBits.push(d.hrEmail);
+  const contactStr=contactBits.length?contactBits.join(' or '):'our Human Resources Department';
+  return `<div style="position:absolute;top:0;left:0;right:0;height:10px;background:${c};"></div>
+  <div style="position:absolute;bottom:0;left:0;right:0;height:10px;background:${c};"></div>
+  <div class="hdr" style="justify-content:space-between;align-items:flex-start;margin-top:10px;">
+    <div style="display:flex;gap:14px;align-items:center;">
+      <div class="logo" style="width:72px;height:72px;">${d.logoImg}</div>
+      <div class="cname" style="font-size:14.5px;">${d.compName}<div style="font-weight:normal;font-size:10.5px;color:#555;margin-top:2px;">${d.compAddr1}<br>${d.compAddr2}</div></div>
+    </div>
+    <div style="text-align:right;font-size:11px;color:#555;white-space:nowrap;">${d.todayStr}</div>
+  </div>
+  <h1 style="color:${c};font-size:19px;margin:28px 0 2px;letter-spacing:.2px;">Letter of Employment Verification</h1>
+  <div style="height:3px;width:72px;background:${c};margin-bottom:18px;"></div>
+  <div class="letterBody" style="font-size:11.5px;line-height:1.65;">
+    ${showTo?`<p style="margin-bottom:14px;">TO:<br>${d.recipientName?`<b>${d.recipientName}</b><br>`:''}${d.recipientAddr1?d.recipientAddr1+'<br>':''}${d.recipientAddr2?d.recipientAddr2:''}</p>`:''}
+    <p style="margin-bottom:14px;">To Whom It May Concern,</p>
+    <p>Please accept this letter as formal confirmation of employment for <b>${d.empName||'[Employee Name]'}</b>.</p>
+    <p style="font-weight:bold;margin:16px 0 2px;">Employment Details:</p>
+    <table style="width:100%;font-size:11.5px;margin:0 0 14px;border-collapse:collapse;">
+      <tr><td style="padding:2px 0;width:220px;vertical-align:top;">Employer Name:</td><td style="padding:2px 0;">${d.compName}</td></tr>
+      <tr><td style="padding:2px 0;vertical-align:top;">Employee Name:</td><td style="padding:2px 0;">${d.empName||'—'}</td></tr>
+      <tr><td style="padding:2px 0;vertical-align:top;">Job Title:</td><td style="padding:2px 0;">${d.position||'—'}</td></tr>
+      <tr><td style="padding:2px 0;vertical-align:top;">Employment Start Date:</td><td style="padding:2px 0;">${d.since}</td></tr>
+      <tr><td style="padding:2px 0;vertical-align:top;">Employment Status:</td><td style="padding:2px 0;">${d.status||'Full-Time'}</td></tr>
+      <tr><td style="padding:2px 0;vertical-align:top;">Current Annual Compensation:</td><td style="padding:2px 0;">$${d.salary} per year</td></tr>
+    </table>
+    <p>${d.empName?d.empName.split(',').pop().trim().split(' ')[0]||d.empName:'This employee'} remains an employee in good standing with our organization.</p>
+    <p>Should you require any further clarification or documentation, please do not hesitate to contact ${contactStr}.</p>
+    <p style="margin-top:46px;">Respectfully,</p>
+    <div style="height:50px;display:flex;align-items:flex-end;">${d.sigImg?`<img src="${d.sigImg}" style="max-height:48px;max-width:200px;">`:''}</div>
+    <div style="border-top:1px solid #333;width:220px;margin-top:2px;"></div>
+    <p style="margin-top:4px;">${d.sigName||'[Your Name]'}<br>${d.sigTitle||'[Your Title]'}<br>${d.compName}</p>
+  </div>`;
+}
+let ltLogoDataUrl='';
+let ltSigDataUrl='';
+let letterSigDataUrl='';
+function renderLetterTool(){
+  document.getElementById('letterToolPage').innerHTML=letterPageHTML({
+    compName:val('ltCompName'),compAddr1:val('ltCompAddr1'),compAddr2:val('ltCompAddr2'),
+    empName:val('ltEmpName'),position:val('ltPosition'),status:val('ltStatus'),
+    recipientName:val('ltRecipName'),recipientAddr1:val('ltRecipAddr1'),recipientAddr2:val('ltRecipAddr2'),
+    hrPhone:val('ltHrPhone'),hrEmail:val('ltHrEmail'),
+    sigName:val('ltSigName'),sigTitle:val('ltSigTitle'),sigImg:ltSigDataUrl,
+    salary:fmt(+val('ltSalary')||0),since:formatDateLong(val('ltSince')),
+    todayStr:formatDateLong(iso(new Date())),accent:val('ltColor'),
+    logoImg:ltLogoDataUrl?`<img src="${ltLogoDataUrl}" style="max-width:100%;max-height:100%">`:'no logo'
+  });
+  fitScaleLetter();
+}
+function clearLtSig(){
+  ltSigDataUrl='';
+  document.getElementById('ltSigFile').value='';
+  document.getElementById('ltSigClearBtn').style.display='none';
+  renderLetterTool();
+}
+document.getElementById('ltSigFile').addEventListener('change',function(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{ltSigDataUrl=r.result;document.getElementById('ltSigClearBtn').style.display='inline-block';renderLetterTool();};
+  r.readAsDataURL(f);
+});
+function clearLetterSig(){
+  letterSigDataUrl='';
+  document.getElementById('letterSigFile').value='';
+  document.getElementById('letterSigClearBtn').style.display='none';
+  render();
+}
+document.getElementById('letterSigFile').addEventListener('change',function(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{letterSigDataUrl=r.result;document.getElementById('letterSigClearBtn').style.display='inline-block';render();};
+  r.readAsDataURL(f);
+});
+function fitScaleLetter(){
+  const wrap=document.getElementById('ltScaleWrap');
+  if(!wrap||wrap.clientWidth===0)return;
+  const scale=Math.min(1,(wrap.clientWidth-4)/816);
+  document.getElementById('letterToolPage').style.transform='scale('+scale+')';
+  wrap.style.height=(1056*scale)+'px';
+}
+window.addEventListener('resize',fitScaleLetter);
+document.getElementById('ltLogoFile').addEventListener('change',function(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{ltLogoDataUrl=r.result;renderLetterTool();};
+  r.readAsDataURL(f);
+});
+function downloadLetterPDF(){
+  buildPDF([document.getElementById('letterToolPage')],'job-letter.pdf');
+}
+function printLetter(){printPages([document.getElementById('letterToolPage')]);}
+
+/* ───────────────────────── Dashboard navigation ───────────────────────── */
+function toggleLetterFields(){
+  const chk=document.getElementById('includeLetter').checked;
+  document.getElementById('letterFields').classList.toggle('hidden',!chk);
+  document.getElementById('letterPageEmbed').classList.toggle('hidden',!chk);
+  render();
+  fitScale();
+}
+function showTool(name){
+  document.getElementById('dashboardPane').classList.add('hidden');
+  document.getElementById('paystubPane').classList.add('hidden');
+  document.getElementById('letterPane').classList.add('hidden');
+  document.getElementById('accountPane').classList.add('hidden');
+  if(name==='paystub'){document.getElementById('paystubPane').classList.remove('hidden');render();fitScale();}
+  else if(name==='letter'){document.getElementById('letterPane').classList.remove('hidden');renderLetterTool();}
+  else if(name==='account'){document.getElementById('accountPane').classList.remove('hidden');loadAccount();}
+  else{document.getElementById('dashboardPane').classList.remove('hidden');}
+}
+
+/* ───────────────────────── Account settings ───────────────────────── */
+async function loadAccount(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session)return;
+  document.getElementById('acctEmail').value=session.user.email;
+  document.getElementById('acctMsg').textContent='';
+  const{data:profile,error}=await sb
+    .from('profiles')
+    .select('full_name,company_name,phone')
+    .eq('id',session.user.id)
+    .single();
+  if(error){document.getElementById('acctMsg').textContent='Could not load your profile.';return;}
+  document.getElementById('acctFullName').value=(profile&&profile.full_name)||'';
+  document.getElementById('acctCompanyName').value=(profile&&profile.company_name)||'';
+  document.getElementById('acctPhone').value=(profile&&profile.phone)||'';
+}
+
+async function saveAccount(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session)return;
+  const msg=document.getElementById('acctMsg');
+  msg.textContent='Saving…';
+  const{error}=await sb.from('profiles').update({
+    full_name:document.getElementById('acctFullName').value.trim(),
+    company_name:document.getElementById('acctCompanyName').value.trim(),
+    phone:document.getElementById('acctPhone').value.trim()
+  }).eq('id',session.user.id);
+  if(error){msg.textContent='Could not save — try again.';return;}
+  msg.textContent='Saved.';
+  refreshNavProfile();
+  setTimeout(()=>{if(msg.textContent==='Saved.')msg.textContent='';},2500);
+}
+
+document.querySelectorAll('#compName,#compAddr1,#compAddr2,#empName,#empNo,#empPos,#empAddr1,#empAddr2,#pDay').forEach(el=>el.addEventListener('input',render));
+
+document.getElementById('logoFile').addEventListener('change',function(e){
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{document.getElementById('logoBox').innerHTML=`<img src="${r.result}" style="max-width:100%;max-height:100%">`;};
+  r.readAsDataURL(f);
+});
+
+// Render a page at its true 816x1056 size in an off-screen stage (no scale transform,
+// no scrolling container), so the capture is always full resolution.
+function stripIds(n){n.removeAttribute('id');n.querySelectorAll('[id]').forEach(x=>x.removeAttribute('id'));}
+function capturePage(el){
+  const stage=document.createElement('div');
+  stage.className='captureStage';
+  const clone=el.cloneNode(true);
+  stripIds(clone);
+  clone.style.transform='none';
+  clone.style.margin='0';
+  clone.style.boxShadow='none';
+  clone.classList.remove('hidden');
+  stage.appendChild(clone);
+  document.body.appendChild(stage);
+  const prevY=window.scrollY;
+  window.scrollTo(0,0);
+  return html2canvas(clone,{
+    scale:2,useCORS:true,backgroundColor:'#ffffff',
+    width:816,height:1056,windowWidth:816,windowHeight:1056,scrollX:0,scrollY:0
+  }).then(canvas=>{
+    stage.remove();window.scrollTo(0,prevY);
+    if(canvas.width<1200||canvas.height<1500)throw new Error('Capture came out too small ('+canvas.width+'x'+canvas.height+')');
+    return canvas;
+  },err=>{stage.remove();window.scrollTo(0,prevY);throw err;});
+}
+async function buildPDF(pages,filename){
+  try{
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({unit:'in',format:'letter',compress:true});
+    for(let i=0;i<pages.length;i++){
+      const canvas=await capturePage(pages[i]);
+      if(i>0)pdf.addPage();
+      pdf.addImage(canvas.toDataURL('image/jpeg',0.95),'JPEG',0,0,8.5,11,undefined,'FAST');
+    }
+    pdf.save(filename);
+  }catch(e){
+    console.error(e);
+    alert('Could not create the PDF. Please try again, or use Print and choose "Save as PDF".');
+  }
+}
+// Print only the page layout: clone pages into #printRoot; print CSS hides everything else.
+function printPages(pages){
+  const root=document.getElementById('printRoot');
+  root.innerHTML='';
+  pages.forEach(p=>{
+    const c=p.cloneNode(true);
+    stripIds(c);
+    c.style.transform='none';
+    c.classList.remove('hidden');
+    root.appendChild(c);
+  });
+  const cleanup=()=>{root.innerHTML='';window.removeEventListener('afterprint',cleanup);};
+  window.addEventListener('afterprint',cleanup);
+  window.print();
+}
+function visibleStubPages(){return [...document.querySelectorAll('#scaleWrap .page:not(.hidden)')];}
+function printPaystub(){printPages(visibleStubPages());}
+function downloadPDF(){buildPDF(visibleStubPages(),'paystub-'+genNum+'.pdf');}
+
+function fitScale(){
+  const wrap=document.getElementById('scaleWrap');
+  if(!wrap||wrap.clientWidth===0)return; // skip while the paystub pane is hidden
+  const scale=Math.min(1,(wrap.clientWidth-4)/816);
+  let totalH=0;
+  [...wrap.querySelectorAll('.page:not(.hidden)')].forEach((p,i)=>{
+    p.style.transform='scale('+scale+')';
+    totalH+=1056*scale+(i>0?24*scale:0);
+  });
+  wrap.style.height=totalH+'px';
+}
+window.addEventListener('resize',fitScale);
+renderForm();
+window.addEventListener('load',drawBarcode);
+
+/* ───────────────────────── Auth + billing ───────────────────────── */
+const sb = supabase.createClient(window.APP_CONFIG.SUPABASE_URL, window.APP_CONFIG.SUPABASE_ANON_KEY);
+let pendingEmail = '';
+let currentEntitlement = null; // cached result of the last record-generation / profile read
+let suppressAuthEvents = false; // true while we're mid-flow through an intermediate session (password check, signup)
+
+function showAuthErr(msg){document.getElementById('authErr').textContent=msg||'';}
+function showPaywallErr(msg){document.getElementById('paywallErr').textContent=msg||'';}
+
+function switchAuthTab(tab){
+  const isSignin=tab==='signin';
+  document.getElementById('tabSignin').classList.toggle('active',isSignin);
+  document.getElementById('tabSignup').classList.toggle('active',!isSignin);
+  document.getElementById('authPanelSignin').classList.toggle('hidden',!isSignin);
+  document.getElementById('authPanelSignup').classList.toggle('hidden',isSignin);
+  document.getElementById('authTabIndicator').classList.toggle('right',!isSignin);
+  showAuthErr('');
+}
+
+// Sign in: email + password. onAuthStateChange below picks up the new
+// session and shows the app once Supabase confirms the credentials.
+async function signInPassword(){
+  const email=document.getElementById('signinEmail').value.trim();
+  const password=document.getElementById('signinPassword').value;
+  if(!email||!password){showAuthErr('Enter your email and password.');return;}
+  showAuthErr('');
+  const{error}=await sb.auth.signInWithPassword({email,password});
+  if(error){showAuthErr(error.message);return;}
+}
+
+// Create account: email + password (works with any email provider).
+async function signUpEmail(){
+  const email=document.getElementById('signupEmail').value.trim();
+  const password=document.getElementById('signupPassword').value;
+  if(!email||!password){showAuthErr('Enter an email and password.');return;}
+  if(password.length<6){showAuthErr('Password must be at least 6 characters.');return;}
+  showAuthErr('');
+  suppressAuthEvents=true;
+  const{error}=await sb.auth.signUp({email,password});
+  suppressAuthEvents=false;
+  if(error){showAuthErr(error.message);return;}
+  document.getElementById('signupStep1').classList.add('hidden');
+  document.getElementById('signupStep2').classList.remove('hidden');
+  document.getElementById('signupStep2Sub').textContent='We sent a confirmation link to '+email+'. Click it, then sign in.';
+}
+
+function backToSignup(){
+  document.getElementById('signupStep2').classList.add('hidden');
+  document.getElementById('signupStep1').classList.remove('hidden');
+  document.getElementById('signupPassword').value='';
+  showAuthErr('');
+}
+
+// Create account or sign in with Google (shared by both tabs).
+async function signInWithGoogle(){
+  showAuthErr('');
+  const{error}=await sb.auth.signInWithOAuth({provider:'google',options:{redirectTo:window.location.origin}});
+  if(error)showAuthErr(error.message);
+}
+
+async function signOut(){
+  await sb.auth.signOut();
+}
+
+function initials(name,email){
+  if(name&&name.trim())return name.trim().split(/\s+/).slice(0,2).map(w=>w[0]).join('').toUpperCase();
+  return (email||'?')[0].toUpperCase();
+}
+async function showApp(session){
+  document.getElementById('authView').classList.add('hidden');
+  document.getElementById('appView').classList.remove('hidden');
+  document.getElementById('topbar').classList.remove('hidden');
+  showTool('dashboard');
+  await refreshNavProfile();
+  refreshEntitlementBadge();
+}
+
+async function refreshNavProfile(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session)return;
+  const{data:profile}=await sb
+    .from('profiles')
+    .select('full_name,company_name,phone,email')
+    .eq('id',session.user.id)
+    .single();
+  const displayName=(profile&&profile.full_name)||session.user.email;
+  document.getElementById('navName').textContent=displayName;
+  document.getElementById('navAvatar').textContent=initials(profile&&profile.full_name,session.user.email);
+  document.getElementById('dashGreeting').textContent=(profile&&profile.full_name)?'Welcome back, '+profile.full_name.split(' ')[0]:'Welcome back';
+}
+
+function showAuthView(){
+  document.getElementById('authView').classList.remove('hidden');
+  document.getElementById('appView').classList.add('hidden');
+  document.getElementById('topbar').classList.add('hidden');
+  switchAuthTab('signin');
+  document.getElementById('signinStep1').classList.remove('hidden');
+  document.getElementById('signupStep1').classList.remove('hidden');
+  document.getElementById('signupStep2').classList.add('hidden');
+  document.getElementById('signinEmail').value='';
+  document.getElementById('signinPassword').value='';
+  document.getElementById('signupEmail').value='';
+  document.getElementById('signupPassword').value='';
+  showAuthErr('');
+}
+
+sb.auth.onAuthStateChange((_event,session)=>{
+  if(suppressAuthEvents)return;
+  if(session)showApp(session);else showAuthView();
+});
+
+async function refreshEntitlementBadge(){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session)return;
+  const{data:profile}=await sb
+    .from('profiles')
+    .select('free_generation_used,subscription_status,subscription_expires_at,pay_per_use_credits,free_account')
+    .eq('id',session.user.id)
+    .single();
+  if(!profile)return;
+  const subActive=profile.subscription_status==='active'&&profile.subscription_expires_at&&new Date(profile.subscription_expires_at)>new Date();
+  const badge=document.getElementById('navSub');
+  if(profile.free_account)badge.textContent='Free account';
+  else if(subActive)badge.textContent='Subscription active';
+  else if(!profile.free_generation_used)badge.textContent='Free generation available';
+  else if(profile.pay_per_use_credits>0)badge.textContent=profile.pay_per_use_credits+' credit(s) left';
+  else badge.textContent='No generations remaining';
+}
+
+// Gate every Print / Download PDF action behind the server-side entitlement
+// check — this is what actually consumes the free generation or a credit.
+async function requestGeneration(actionFn){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){showAuthView();return;}
+  let res;
+  try{
+    res=await fetch('/api/record-generation',{
+      method:'POST',
+      headers:{Authorization:'Bearer '+session.access_token}
+    });
+  }catch(e){
+    alert('Could not reach the server. Check your connection and try again.');
+    return;
+  }
+  if(!res.ok){
+    alert('Something went wrong checking your account. Please try again.');
+    return;
+  }
+  const{allowed}=await res.json();
+  refreshEntitlementBadge();
+  if(allowed){
+    actionFn();
+  }else{
+    showPaywallErr('');
+    document.getElementById('paywall').classList.remove('hidden');
+  }
+}
+
+function closePaywall(){
+  document.getElementById('paywall').classList.add('hidden');
+}
+
+async function startCheckout(plan){
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session)return;
+  showPaywallErr('Redirecting to checkout…');
+  try{
+    const res=await fetch('/api/create-checkout-session',{
+      method:'POST',
+      headers:{'Content-Type':'application/json',Authorization:'Bearer '+session.access_token},
+      body:JSON.stringify({plan})
+    });
+    if(!res.ok)throw new Error('Checkout session request failed');
+    const{url}=await res.json();
+    window.location.href=url;
+  }catch(e){
+    showPaywallErr('Could not start checkout. Please try again.');
+  }
+}
+
+// Returning from Stripe Checkout (success_url has ?checkout=success)
+if(new URLSearchParams(window.location.search).get('checkout')==='success'){
+  window.addEventListener('load',()=>setTimeout(refreshEntitlementBadge,1500));
+}
+</script>
+</body>
+</html>

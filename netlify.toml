@@ -1,0 +1,15 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+  # SUPABASE_URL and SUPABASE_ANON_KEY are client-safe by design (RLS, not
+  # secrecy, protects the data) and are meant to ship in config.js. Without
+  # this, Netlify's secrets scanner flags them and fails every build.
+  [build.environment]
+    SECRETS_SCAN_OMIT_KEYS = "SUPABASE_URL,SUPABASE_ANON_KEY"
+
+# Stripe sends raw JSON that must NOT be re-parsed/altered before signature
+# verification, so the webhook function reads the raw body itself.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
